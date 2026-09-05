@@ -20,7 +20,7 @@ struct DashboardItem: Identifiable, Sendable {
     var summary = "Unavailable"
     var sections: [StateSection] = []
     var diagnostics: [String] = []
-    var attention = false
+    var attentionReason: String?
     var modified: Date?
     var stateURL: URL?
     var definitionURL: URL?
@@ -30,7 +30,21 @@ struct DashboardItem: Identifiable, Sendable {
     var stale = false
     var typeName: String { kind?.rawValue ?? "Issue" }
     var modifiedSort: Date { modified ?? .distantPast }
-    var attentionRank: Int { attention ? 0 : 1 }
+    var attention: Bool { attentionReason != nil || !diagnostics.isEmpty }
+    var attentionDetail: String? { attentionReason ?? diagnostics.first }
+    /// Sort order for the "Status" card ordering: most urgent first, terminal and unknown last.
+    var statusRank: Int {
+        if !diagnostics.isEmpty { return 0 }
+        switch status {
+        case "blocked": return 1
+        case "in_progress", "active": return 2
+        case "paused": return 3
+        case "draft": return 4
+        case "completed": return 5
+        case "archived", "abandoned": return 6
+        default: return 7
+        }
+    }
 }
 struct StateDocument {
     var preamble: String
@@ -124,9 +138,12 @@ struct PackageReader {
                 }
                 if let schedule = manifest["schedule"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: schedule, options: [.prettyPrinted, .sortedKeys]) { item.schedule = String(data: data, encoding: .utf8) }
             }
-            item.attention = item.status == "blocked" || ["failed", "blocked", "partial"].contains(item.outcome ?? "") || ["Blockers", "Pending decisions", "Known failures", "Open interaction", "Open operation"].contains { StateDocument.meaningful(doc.section($0)) }
+            let terminal = ["completed", "abandoned", "archived"].contains(item.status)
+            let openSections = terminal ? [] : ["Blockers", "Pending decisions", "Known failures", "Open interaction", "Open operation"].filter { StateDocument.meaningful(doc.section($0)) }
+            if item.status == "blocked" { item.attentionReason = "Blocked" }
+            else if !terminal, let outcome = item.outcome, ["failed", "blocked", "partial"].contains(outcome) { item.attentionReason = "Last run \(outcome)" }
+            else if let section = openSections.first { item.attentionReason = "Unresolved \(section.lowercased())" }
         } catch { item.diagnostics.append(error.localizedDescription) }
-        item.attention = item.attention || !item.diagnostics.isEmpty
         return item
     }
     struct ReadError: LocalizedError { let message: String; init(_ message: String) { self.message = message }; var errorDescription: String? { message } }
@@ -148,7 +165,7 @@ struct Discovery {
                 }
             } catch {
                 var issue = DashboardItem(folder: root, packageID: root.lastPathComponent, name: root.lastPathComponent)
-                issue.diagnostics = ["Cannot read folder: \(error.localizedDescription)"]; issue.attention = true
+                issue.diagnostics = ["Cannot read folder: \(error.localizedDescription)"]
                 items[issue.id] = issue
             }
         }
@@ -165,10 +182,10 @@ struct SnapshotMerge {
         for index in result.indices where !result[index].diagnostics.isEmpty {
             let failure = result[index]
             if var old = previous.first(where: { $0.id == failure.id && !$0.sections.isEmpty }) {
-                old.diagnostics = failure.diagnostics; old.stale = true; old.attention = true; result[index] = old
+                old.diagnostics = failure.diagnostics; old.stale = true; result[index] = old
             }
             for var old in previous where old.id.hasPrefix(failure.id + "/") && !result.contains(where: { $0.id == old.id }) {
-                old.diagnostics = failure.diagnostics; old.stale = true; old.attention = true; result.append(old)
+                old.diagnostics = failure.diagnostics; old.stale = true; result.append(old)
             }
         }
         return result

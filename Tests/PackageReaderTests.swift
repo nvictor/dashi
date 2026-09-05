@@ -35,6 +35,24 @@ final class PackageReaderTests: XCTestCase {
         let item = try XCTUnwrap(PackageReader.read(folder))
         XCTAssertEqual(item.status, "active"); XCTAssertEqual(item.outcome, "partial"); XCTAssertTrue(item.attention)
     }
+    func testAttentionReasonAndTerminalSuppression() throws {
+        let blocked = try XCTUnwrap(PackageReader.read(try package("blocked", state: "Status: blocked\n## Current step\nx")))
+        XCTAssertEqual(blocked.attentionReason, "Blocked"); XCTAssertEqual(blocked.attentionDetail, "Blocked")
+        let open = try XCTUnwrap(PackageReader.read(try package("open", state: "Status: in_progress\n## Current step\nx\n## Pending decisions\n- Pick a database")))
+        XCTAssertEqual(open.attentionReason, "Unresolved pending decisions")
+        let done = try XCTUnwrap(PackageReader.read(try package("done", state: "Status: completed\n## Current step\nx\n## Blockers\n- Waiting on review")))
+        XCTAssertEqual(done.status, "completed"); XCTAssertNil(done.attentionReason); XCTAssertFalse(done.attention)
+        let archived = try XCTUnwrap(PackageReader.read(try package("archived", kind: .task, state: "## Last attempted run\n- 2026-09-01T10:00:00Z — failed.\n## Current checkpoint\nx", changes: ["status": "archived"])))
+        XCTAssertEqual(archived.outcome, "failed"); XCTAssertFalse(archived.attention)
+    }
+    func testStatusRankOrder() throws {
+        let ranks = try ["Status: blocked", "Status: in_progress", "Status: paused", "Status: draft", "Status: completed", "Status: abandoned"].enumerated().map {
+            try XCTUnwrap(PackageReader.read(try package("rank\($0.offset)", state: "\($0.element)\n## Current step\nx"))).statusRank
+        }
+        XCTAssertEqual(ranks, ranks.sorted()); XCTAssertEqual(Set(ranks).count, ranks.count)
+        let broken = try XCTUnwrap(PackageReader.read(try package("broken", state: "Status: nonsense\n## Current step\nx")))
+        XCTAssertEqual(broken.statusRank, 0)
+    }
     func testEmptyMarkersAndUnrelatedDates() throws {
         let doc = StateDocument("## Last attempted run\n- None recorded.\n## Extra\n2026-09-01T10:00:00Z")
         XCTAssertNil(StateDocument.explicitDate(doc.section("Last attempted run")))

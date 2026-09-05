@@ -119,8 +119,8 @@ final class DashboardStore: ObservableObject {
             for source in sources where source.problem != nil {
                 let url = URL(fileURLWithPath: source.path)
                 var issue = DashboardItem(folder: url, packageID: source.path, name: url.lastPathComponent)
-                issue.diagnostics = [source.problem!]; issue.attention = true; merged.append(issue)
-                for var old in items where old.id.hasPrefix(source.path + "/") { old.stale = true; old.attention = true; old.diagnostics = [source.problem!]; merged.append(old) }
+                issue.diagnostics = [source.problem!]; merged.append(issue)
+                for var old in items where old.id.hasPrefix(source.path + "/") { old.stale = true; old.diagnostics = [source.problem!]; merged.append(old) }
             }
             items = merged; scanning = false
             if refreshAgain { refreshAgain = false; refresh() }

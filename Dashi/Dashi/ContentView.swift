@@ -5,10 +5,10 @@ struct ContentView: View {
     @EnvironmentObject var store: DashboardStore
     @State private var filter: String? = "all"
     @State private var search = ""
-    @State private var ordering = CardOrder.attention
+    @State private var ordering = CardOrder.status
 
     private enum CardOrder: String, CaseIterable {
-        case attention = "Attention first", recent = "Most recent", name = "Name"
+        case status = "Status", recent = "Most recent", name = "Name"
     }
     private var title: String {
         if filter == "attention" { return "Needs attention" }
@@ -25,7 +25,10 @@ struct ContentView: View {
             else { matches = true }
             return matches && (search.isEmpty || "\(item.name) \(item.packageID)".localizedCaseInsensitiveContains(search))
         }.sorted { lhs, rhs in
-            if ordering == .attention && lhs.attention != rhs.attention { return lhs.attention }
+            if ordering == .status {
+                if lhs.statusRank != rhs.statusRank { return lhs.statusRank < rhs.statusRank }
+                if lhs.attention != rhs.attention { return lhs.attention }
+            }
             if ordering != .name {
                 let left = lhs.lastEvent ?? lhs.modifiedSort
                 let right = rhs.lastEvent ?? rhs.modifiedSort
@@ -139,9 +142,9 @@ struct StatusCard: View {
                 Label(item.typeName, systemImage: item.kind?.symbol ?? "exclamationmark.circle")
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
-                if item.attention {
+                if let detail = item.attentionDetail {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
-                        .accessibilityLabel("Needs attention").help("Needs attention")
+                        .accessibilityLabel("Needs attention: \(detail)").help(detail)
                 }
                 Menu {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
