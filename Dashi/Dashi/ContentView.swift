@@ -12,7 +12,7 @@ struct ContentView: View {
     }
     private var title: String {
         if filter == "attention" { return "Needs attention" }
-        if let kind = PackageKind.allCases.first(where: { $0.rawValue == filter }) { return kind.rawValue + "s" }
+        if let kind = PackageKind.allCases.first(where: { $0.rawValue == filter }) { return kind.pluralName }
         if let source = store.sources.first(where: { $0.id.uuidString == filter }) { return URL(fileURLWithPath: source.path).lastPathComponent }
         return "Overview"
     }
@@ -42,7 +42,7 @@ struct ContentView: View {
                 Label("Needs Attention", systemImage: "exclamationmark.circle").tag("attention")
                 Section("Types") {
                     ForEach(PackageKind.allCases, id: \.self) { kind in
-                        Label(kind.rawValue + "s", systemImage: kind.symbol).tag(kind.rawValue)
+                        Label(kind.pluralName, systemImage: kind.symbol).tag(kind.rawValue)
                     }
                 }
                 Section("Sources") {

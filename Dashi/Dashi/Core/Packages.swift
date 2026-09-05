@@ -3,6 +3,7 @@ import Foundation
 enum PackageKind: String, CaseIterable, Codable, Sendable {
     case workflow = "Workflow", coach = "Coach", task = "Task"
     var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file" } }
+    var pluralName: String { switch self { case .coach: "Coaches"; default: rawValue + "s" } }
 }
 struct StateSection: Identifiable, Sendable {
     var id: Int
