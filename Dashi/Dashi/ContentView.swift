@@ -142,10 +142,6 @@ struct StatusCard: View {
                 Label(item.typeName, systemImage: item.kind?.symbol ?? "exclamationmark.circle")
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
-                if let detail = item.attentionDetail {
-                    Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.orange)
-                        .accessibilityLabel("Needs attention: \(detail)").help(detail)
-                }
                 Menu {
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
                     if !item.diagnostics.isEmpty { Button("Show Read Error…") { showIssue = true } }
@@ -161,7 +157,11 @@ struct StatusCard: View {
                     .padding(.horizontal, 9).padding(.vertical, 5)
                     .foregroundStyle(statusColor)
                     .background(statusColor.opacity(0.10), in: Capsule())
-                if item.kind == .task, let outcome = item.outcome {
+                if let detail = item.attentionReason {
+                    Label(detail, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption).foregroundStyle(.orange).lineLimit(1)
+                        .accessibilityLabel("Needs attention: \(detail)").help(detail)
+                } else if item.kind == .task, let outcome = item.outcome {
                     Text("Last run: \(outcome)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
