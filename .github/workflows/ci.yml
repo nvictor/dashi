@@ -1,0 +1,20 @@
+name: Build and Test
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+      - name: Build and test
+        run: |
+          set -o pipefail
+          xcodebuild -project Dashi/Dashi.xcodeproj -scheme Dashi \
+            -destination 'platform=macOS,arch=arm64' \
+            -derivedDataPath build/DerivedData CODE_SIGNING_ALLOWED=NO test

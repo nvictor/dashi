@@ -1,0 +1,140 @@
+name: macOS Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag (v1.0.0)
+        required: true
+        type: string
+
+concurrency:
+  group: dashi-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          git rev-parse --verify "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "MARKETING_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT" >> "$GITHUB_ENV"
+
+      - name: Set up Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Create build directory
+        run: mkdir -p build
+
+      - name: Import Developer ID Certificate
+        run: |
+          echo "${{ secrets.DEVELOPER_ID_P12 }}" | base64 --decode > build/DeveloperID.p12
+          security create-keychain -p "" build.keychain
+          security import build/DeveloperID.p12 -k build.keychain -P "${{ secrets.DEVELOPER_ID_P12_PASSWORD }}" -T /usr/bin/codesign
+          security list-keychains -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-keychain-settings -t 3600 -l build.keychain
+
+      - name: Configure keychain for codesign
+        run: |
+          security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain
+
+      - name: Install Provisioning Profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.DASHI_PROVISIONING_PROFILE }}" | base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/Dashi.provisionprofile
+
+      - name: Build and Archive App
+        run: |
+          set -o pipefail
+          test -n "${{ secrets.SPARKLE_PUBLIC_ED_KEY }}"
+          xcodebuild -project "Dashi/Dashi.xcodeproj" \
+            -scheme "Dashi" \
+            -configuration Release \
+            -archivePath "$PWD/build/Dashi.xcarchive" \
+            -derivedDataPath "$PWD/build/DerivedData" \
+            -destination "platform=macOS,arch=arm64" \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            DEBUG_INFORMATION_FORMAT="dwarf" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGN_IDENTITY="Developer ID Application: Victor Noagbodji (2DZ6D8C78T)" \
+            SPARKLE_PUBLIC_ED_KEY="${{ secrets.SPARKLE_PUBLIC_ED_KEY }}" \
+            MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            archive
+
+      - name: Export App
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/build/Dashi.xcarchive" \
+            -exportOptionsPlist "$PWD/Dashi/Configuration/ExportOptions.plist" \
+            -exportPath "$PWD/build"
+
+      - name: Notarize app
+        run: |
+          ditto -c -k --keepParent "build/Dashi.app" "build/Dashi.zip"
+          xcrun notarytool submit "build/Dashi.zip" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --password "${{ secrets.APP_SPECIFIC_PASSWORD }}" \
+            --wait
+          xcrun stapler staple "build/Dashi.app"
+
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Dashi" \
+            -srcfolder "build/Dashi.app" \
+            -ov -format UDZO "build/Dashi.dmg"
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY"
+          mkdir -p build/sparkle-updates
+          cp "build/Dashi.dmg" "build/sparkle-updates/Dashi.dmg"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > build/sparkle_ed25519.key
+          chmod 600 build/sparkle_ed25519.key
+          build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            --ed-key-file build/sparkle_ed25519.key \
+            --download-url-prefix "https://github.com/nvictor/dashi/releases/download/${RELEASE_TAG}/" \
+            build/sparkle-updates
+
+      - name: Upload DMG and Sparkle appcast to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            build/Dashi.dmg
+            build/sparkle-updates/appcast.xml
+            build/sparkle-updates/*.delta
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+          rm -f build/DeveloperID.p12 build/sparkle_ed25519.key
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/Dashi.provisionprofile"

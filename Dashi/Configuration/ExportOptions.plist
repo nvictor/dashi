@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Export method for Developer ID apps -->
+    <key>method</key>
+    <string>developer-id</string>
+
+    <!-- Manual signing style -->
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <!-- The certificate to use for signing -->
+    <key>signingCertificate</key>
+    <string>Developer ID Application: Victor Noagbodji (2DZ6D8C78T)</string>
+
+    <!-- Map bundle IDs to provisioning profile names -->
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>com.mellowfleet.Dashi</key>
+        <string>Dashi</string>
+    </dict>
+
+    <key>architectures</key>
+    <array>
+        <string>arm64</string>
+    </array>
+
+    <key>compileBitcode</key>
+    <false/>
+
+    <!-- Strip Swift symbols (optional, recommended for distribution) -->
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <!-- Include all architectures -->
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+</dict>
+</plist>
