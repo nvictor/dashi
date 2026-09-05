@@ -1,8 +1,8 @@
 {
   "app_concept": "Dashi — a personal dashboard that surfaces at-a-glance status for workflows, coaches, and tasks.",
-  "primary_metaphor": "One oversized analog gauge integrated into an aluminum dashboard console",
+  "primary_metaphor": "One oversized analog gauge set into a slate-blue shell",
   "supporting_motifs": [
-    "Broad amber scale and solid needle"
+    "Broad blue scale and solid needle"
   ],
   "composition_family": "inset-object-with-overlap",
   "tone": [
@@ -13,14 +13,13 @@
   ],
   "palette_hints": [
     "slate-blue shell",
-    "satin aluminum console",
     "matte dark-blue gauge faces",
-    "solid amber scales"
+    "solid blue accents"
   ],
   "include_symbols": [
     "gauge dials",
     "needles",
-    "instrument console"
+    "slate-blue shell"
   ],
   "avoid_symbols": [
     "text",

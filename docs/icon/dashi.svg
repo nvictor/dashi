@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512">
   <title>Dashi dashboard gauge</title>
-  <desc>One oversized amber gauge integrated into a satin aluminum dashboard console. Broad shapes and a solid needle keep the instrument recognizable at small sizes.</desc>
+  <desc>One oversized blue gauge set into a slate-blue shell. A smoothly rounded scale and solid needle keep the instrument recognizable at small sizes.</desc>
   <defs>
     <linearGradient id="shell" x1="0" y1="0" x2="0.8" y2="1">
       <stop stop-color="#677C99" />
       <stop offset="0.55" stop-color="#344257" />
       <stop offset="1" stop-color="#192333" />
-    </linearGradient>
-    <linearGradient id="console" x1="0" y1="0" x2="0.15" y2="1">
-      <stop stop-color="#EDF1F4" />
-      <stop offset="0.5" stop-color="#CED6DE" />
-      <stop offset="1" stop-color="#93A2B4" />
     </linearGradient>
     <radialGradient id="face" cx="0.35" cy="0.2" r="0.9">
       <stop stop-color="#253447" />
@@ -24,13 +19,10 @@
     </filter>
   </defs>
   <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#shell)" filter="url(#baseShadow)" />
-  <path d="M88 220H424Q472 220 472 268V372Q472 460 380 460H132Q40 460 40 372V268Q40 220 88 220Z" fill="url(#console)" />
   <g filter="url(#shadow)" transform="translate(256 250) scale(1.55) translate(-256 -220)">
-    <circle cx="256.0" cy="220.0" r="122.0" fill="url(#face)" />
-    <path d="M190.946 285.054 A92.0 92.0 0 1 1 321.054 285.054 L309.740 273.740 A76.0 76.0 0 1 0 202.260 273.740 Z" fill="#FFBC59" />
-    <circle cx="196.603" cy="279.397" r="8.0" fill="#FFBC59" />
-    <circle cx="315.397" cy="279.397" r="8.0" fill="#FFBC59" />
-    <path d="M260.968 223.365 L298 158 L251.032 216.635 Z" fill="#FFE4A5" />
-    <circle cx="256.0" cy="220.0" r="12" fill="#FFD078" />
+    <circle cx="256.0" cy="220.0" r="122.0" fill="url(#face)" stroke="#0A121D" stroke-width="6" />
+    <path d="M199.431 276.569 A80 80 0 1 1 312.569 276.569" fill="none" stroke="#4C9AFF" stroke-width="32" stroke-linecap="round" />
+    <path d="M270.96 222.88 L298 158 L247.78 207.18 Z" fill="#EAF4FF" />
+    <circle cx="256.0" cy="220.0" r="16" fill="#4C9AFF" />
   </g>
 </svg>
