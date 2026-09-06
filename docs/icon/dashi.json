@@ -1,8 +1,8 @@
 {
-  "app_concept": "Dashi — a personal dashboard that surfaces at-a-glance status for workflows, coaches, and tasks.",
-  "primary_metaphor": "One oversized analog gauge set into a slate-blue shell",
+  "app_concept": "Dashi is a personal dashboard for at-a-glance workflow, coach, and task status.",
+  "primary_metaphor": "An oversized blue gauge recessed into a slate-blue shell",
   "supporting_motifs": [
-    "Broad blue scale and solid needle"
+    "Broad round-ended blue scale and solid needle"
   ],
   "composition_family": "inset-object-with-overlap",
   "tone": [

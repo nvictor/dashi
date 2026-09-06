@@ -1,28 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512">
   <title>Dashi dashboard gauge</title>
-  <desc>One oversized blue gauge set into a slate-blue shell. A smoothly rounded scale and solid needle keep the instrument recognizable at small sizes.</desc>
-  <defs>
-    <linearGradient id="shell" x1="0" y1="0" x2="0.8" y2="1">
-      <stop stop-color="#677C99" />
-      <stop offset="0.55" stop-color="#344257" />
-      <stop offset="1" stop-color="#192333" />
-    </linearGradient>
-    <radialGradient id="face" cx="0.35" cy="0.2" r="0.9">
-      <stop stop-color="#253447" />
-      <stop offset="1" stop-color="#101A27" />
-    </radialGradient>
-    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
-      <feDropShadow dx="0" dy="7" stdDeviation="5" flood-color="#08121F" flood-opacity="0.36" />
-    </filter>
-    <filter id="baseShadow" x="-15%" y="-15%" width="130%" height="140%">
-      <feDropShadow dx="0" dy="7" stdDeviation="5" flood-color="#101A27" flood-opacity="0.22" />
-    </filter>
-  </defs>
-  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#shell)" filter="url(#baseShadow)" />
-  <g filter="url(#shadow)" transform="translate(256 250) scale(1.55) translate(-256 -220)">
-    <circle cx="256.0" cy="220.0" r="122.0" fill="url(#face)" stroke="#0A121D" stroke-width="6" />
-    <path d="M199.431 276.569 A80 80 0 1 1 312.569 276.569" fill="none" stroke="#4C9AFF" stroke-width="32" stroke-linecap="round" />
-    <path d="M270.96 222.88 L298 158 L247.78 207.18 Z" fill="#EAF4FF" />
-    <circle cx="256.0" cy="220.0" r="16" fill="#4C9AFF" />
-  </g>
+  <desc>An oversized blue gauge recessed into a slate-blue shell. Depth uses vector geometry and gradients without filter dependencies.</desc>
+  <defs><linearGradient id="shell" x1="0" y1="0" x2="0.7" y2="1"><stop stop-color="#6D819C"/><stop offset="1" stop-color="#293749"/></linearGradient><linearGradient id="face" x1="0" y1="0" x2="0.7" y2="1"><stop stop-color="#24384E"/><stop offset="1" stop-color="#0D1929"/></linearGradient><clipPath id="shellClip"><rect x="24" y="24" width="464" height="464" rx="104" fill="white"/></clipPath></defs>
+  <rect x="24" y="30" width="464" height="464" rx="104" fill="#182333"/><rect x="24" y="24" width="464" height="464" rx="104" fill="url(#shell)"/>
+  <circle cx="256" cy="260" r="200" fill="#192737"/>
+  <circle cx="256" cy="250" r="197" fill="#101D2B"/>
+  <circle cx="256" cy="247" r="187" fill="url(#face)"/>
+  <path d="M164 339 A130 130 0 1 1 348 339" fill="none" stroke="#4C9AFF" stroke-width="48" stroke-linecap="round"/>
+  <path d="M239 244 L328 158 L272 267 Z" fill="#EDF6FF"/>
+  <circle cx="256" cy="250" r="24" fill="#4C9AFF"/>
+
 </svg>
