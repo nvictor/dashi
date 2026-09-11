@@ -10,12 +10,6 @@ struct ContentView: View {
     private enum CardOrder: String, CaseIterable {
         case status = "Status", recent = "Most recent", name = "Name"
     }
-    private var title: String {
-        if filter == "attention" { return "Needs attention" }
-        if let kind = PackageKind.allCases.first(where: { $0.rawValue == filter }) { return kind.pluralName }
-        if let source = store.sources.first(where: { $0.id.uuidString == filter }) { return URL(fileURLWithPath: source.path).lastPathComponent }
-        return "Overview"
-    }
     private var visible: [DashboardItem] {
         store.items.filter { item in
             let matches: Bool
@@ -71,11 +65,8 @@ struct ContentView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
                             HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(title).font(.largeTitle.bold())
-                                    Text("\(visible.count) items · \(visible.filter(\.attention).count) need attention")
-                                        .foregroundStyle(.secondary)
-                                }
+                                Text("\(visible.count) items")
+                                    .foregroundStyle(.secondary)
                                 Spacer()
                                 Picker("Sort", selection: $ordering) {
                                     ForEach(CardOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -98,8 +89,8 @@ struct ContentView: View {
             .searchable(text: $search, prompt: "Find an item")
             .toolbar {
                 ToolbarItem { if store.scanning { ProgressView().controlSize(.small) } }
-                ToolbarItem { Button("Refresh", systemImage: "arrow.clockwise") { store.refresh() }.keyboardShortcut("r") }
-                ToolbarItem { Button("Add Folder", systemImage: "folder.badge.plus") { store.chooseFolder() } }
+                ToolbarItem { Button("Refresh", systemImage: "arrow.clockwise") { store.refresh() }.keyboardShortcut("r").help("Refresh") }
+                ToolbarItem { Button("Add Folder", systemImage: "folder.badge.plus") { store.chooseFolder() }.help("Add source folder") }
             }
         }
         .dropDestination(for: URL.self) { urls, _ in store.add(urls); return !urls.isEmpty }
@@ -143,6 +134,11 @@ struct StatusCard: View {
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
                 Menu {
+                    Button("Resume Prompt") {
+                        let prompt = "Let's continue working on \(item.name) in \"\(item.folder.path)\"."
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(prompt, forType: .string)
+                    }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
                     if !item.diagnostics.isEmpty { Button("Show Read Error…") { showIssue = true } }
                 } label: { Image(systemName: "ellipsis") }
