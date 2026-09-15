@@ -5,16 +5,15 @@ struct ContentView: View {
     @EnvironmentObject var store: DashboardStore
     @State private var filter: String? = "all"
     @State private var search = ""
-    @State private var ordering = CardOrder.status
+    @State private var ordering = CardOrder.recent
 
     private enum CardOrder: String, CaseIterable {
-        case status = "Status", recent = "Most recent", name = "Name"
+        case recent = "Most recent", status = "Status"
     }
     private var visible: [DashboardItem] {
         store.items.filter { item in
             let matches: Bool
-            if filter == "attention" { matches = item.attention }
-            else if let kind = PackageKind.allCases.first(where: { $0.rawValue == filter }) { matches = item.kind == kind }
+            if let kind = PackageKind.allCases.first(where: { $0.rawValue == filter }) { matches = item.kind == kind }
             else if let source = store.sources.first(where: { $0.id.uuidString == filter }) { matches = item.id == source.path || item.id.hasPrefix(source.path + "/") }
             else { matches = true }
             return matches && (search.isEmpty || "\(item.name) \(item.packageID)".localizedCaseInsensitiveContains(search))
@@ -23,11 +22,9 @@ struct ContentView: View {
                 if lhs.statusRank != rhs.statusRank { return lhs.statusRank < rhs.statusRank }
                 if lhs.attention != rhs.attention { return lhs.attention }
             }
-            if ordering != .name {
-                let left = lhs.lastEvent ?? lhs.modifiedSort
-                let right = rhs.lastEvent ?? rhs.modifiedSort
-                if left != right { return left > right }
-            }
+            let left = lhs.lastEvent ?? lhs.modifiedSort
+            let right = rhs.lastEvent ?? rhs.modifiedSort
+            if left != right { return left > right }
             let comparison = lhs.name.localizedStandardCompare(rhs.name)
             return comparison == .orderedSame ? lhs.id < rhs.id : comparison == .orderedAscending
         }
@@ -36,7 +33,6 @@ struct ContentView: View {
         NavigationSplitView {
             List(selection: $filter) {
                 Label("Overview", systemImage: "square.grid.2x2").tag("all")
-                Label("Needs Attention", systemImage: "exclamationmark.circle").tag("attention")
                 Section("Types") {
                     ForEach(PackageKind.allCases, id: \.self) { kind in
                         Label(kind.pluralName, systemImage: kind.symbol).tag(kind.rawValue)
