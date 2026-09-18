@@ -135,6 +135,11 @@ struct StatusCard: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(prompt, forType: .string)
                     }
+                    Button("Status Prompt") {
+                        let prompt = "What's the status of \(item.name) in \"\(item.folder.path)\"?"
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(prompt, forType: .string)
+                    }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
                     if !item.diagnostics.isEmpty { Button("Show Read Error…") { showIssue = true } }
                 } label: { Image(systemName: "ellipsis") }
