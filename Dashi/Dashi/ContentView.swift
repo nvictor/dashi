@@ -98,7 +98,7 @@ struct ContentView: View {
 
 private extension PackageKind {
     var symbol: String {
-        switch self { case .workflow: "point.3.connected.trianglepath.dotted"; case .coach: "figure.mind.and.body"; case .task: "checkmark.circle" }
+        switch self { case .workflow: "point.3.connected.trianglepath.dotted"; case .coach: "figure.mind.and.body"; case .task: "checkmark.circle"; case .conversation: "bubble.left.and.bubble.right" }
     }
 }
 

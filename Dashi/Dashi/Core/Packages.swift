@@ -1,8 +1,8 @@
 import Foundation
 
 enum PackageKind: String, CaseIterable, Codable, Sendable {
-    case workflow = "Workflow", coach = "Coach", task = "Task"
-    var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file" } }
+    case workflow = "Workflow", coach = "Coach", task = "Task", conversation = "Conversation"
+    var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file"; case .conversation: "conversation_file" } }
     var pluralName: String { switch self { case .coach: "Coaches"; default: rawValue + "s" } }
 }
 struct StateSection: Identifiable, Sendable {
@@ -102,7 +102,7 @@ struct PackageReader {
             item.kind = kind
             item.packageID = manifest["id"] as? String ?? folder.lastPathComponent
             item.name = manifest["name"] as? String ?? item.packageID.replacingOccurrences(of: "-", with: " ").capitalized
-            guard let version = manifest["schema_version"] as? Int, version == (kind == .workflow ? 1 : 2) else { throw ReadError("Unsupported package schema version.") }
+            guard let version = manifest["schema_version"] as? Int, version == (kind == .workflow || kind == .conversation ? 1 : 2) else { throw ReadError("Unsupported package schema version.") }
             guard let packageID = manifest["id"] as? String, packageID == folder.lastPathComponent,
                   packageID.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { throw ReadError("Package ID must match its folder and use lowercase hyphenated words.") }
             func file(_ key: String) throws -> URL {
@@ -116,7 +116,7 @@ struct PackageReader {
             }
             item.stateURL = try file("state_file"); item.definitionURL = try file(kind.field)
             _ = try file("runner_file")
-            if kind == .workflow { _ = try file("memory_file") }
+            if kind == .workflow || kind == .conversation { _ = try file("memory_file") }
             guard let stateURL = item.stateURL else { throw ReadError("Missing state file.") }
             let doc = StateDocument(try String(contentsOf: stateURL, encoding: .utf8))
             item.sections = doc.sections
@@ -126,6 +126,9 @@ struct PackageReader {
                 if statuses.count == 1, let status = statuses.first, ["draft", "in_progress", "paused", "blocked", "completed", "abandoned"].contains(status) { item.status = status }
                 else { item.diagnostics.append("Missing, ambiguous, or invalid workflow lifecycle.") }
                 item.summary = doc.section("Current step") ?? "Unavailable"
+            } else if kind == .conversation {
+                item.status = "ongoing"
+                item.summary = doc.section("Current question") ?? "Unavailable"
             } else {
                 if let status = manifest["status"] as? String, ["draft", "active", "paused", "archived"].contains(status) { item.status = status }
                 else { item.diagnostics.append("Missing or invalid package lifecycle.") }

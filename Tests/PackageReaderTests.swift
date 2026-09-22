@@ -12,7 +12,7 @@ final class PackageReaderTests: XCTestCase {
     func package(_ name: String = "sample", kind: PackageKind = .workflow, state: String = "Status: draft\n\n## Current step\nStep one", parent: URL? = nil, changes: [String: Any] = [:]) throws -> URL {
         let folder = (parent ?? root).appendingPathComponent(name)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        var manifest: [String: Any] = ["id": name, "schema_version": kind == .workflow ? 1 : 2, kind.field: "definition.md", "state_file": "state.md", "runner_file": "runner.md", "status": "active", "memory_file": "memory.md"]
+        var manifest: [String: Any] = ["id": name, "schema_version": kind == .workflow || kind == .conversation ? 1 : 2, kind.field: "definition.md", "state_file": "state.md", "runner_file": "runner.md", "status": "active", "memory_file": "memory.md"]
         manifest.merge(changes) { _, new in new }
         try JSONSerialization.data(withJSONObject: manifest).write(to: folder.appendingPathComponent("manifest.json"))
         for file in ["definition.md", "runner.md", "memory.md"] { try "# Synthetic fixture".write(to: folder.appendingPathComponent(file), atomically: true, encoding: .utf8) }
@@ -34,6 +34,12 @@ final class PackageReaderTests: XCTestCase {
         let folder = try package(kind: .task, state: "## Last attempted run\n- 2026-09-01T10:00:00-04:00 — partial.\n## Current checkpoint\nTwo remaining\n## Known failures\n- None.")
         let item = try XCTUnwrap(PackageReader.read(folder))
         XCTAssertEqual(item.status, "active"); XCTAssertEqual(item.outcome, "partial"); XCTAssertTrue(item.attention)
+    }
+    func testConversationHasNoLifecycle() throws {
+        let folder = try package(kind: .conversation, state: "# Conversation state\n\n## Current question\nWhat makes a chorus land?\n\n## Unresolved threads\nNone recorded yet.\n\n## Pending exchange\nNo exchange has occurred in this package.\n\n## Resume point\nStart from the current question.")
+        let item = try XCTUnwrap(PackageReader.read(folder))
+        XCTAssertEqual(item.status, "ongoing"); XCTAssertEqual(item.summary, "What makes a chorus land?")
+        XCTAssertFalse(item.attention); XCTAssertNil(item.lastEvent); XCTAssertTrue(item.diagnostics.isEmpty)
     }
     func testAttentionReasonAndTerminalSuppression() throws {
         let blocked = try XCTUnwrap(PackageReader.read(try package("blocked", state: "Status: blocked\n## Current step\nx")))

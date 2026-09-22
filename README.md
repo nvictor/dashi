@@ -2,7 +2,7 @@
 
 Your personal dashboard.
 
-Drop a folder to see the status and latest updates across your workflows, coaches, and tasks. Find what needs attention at a glance.
+Drop a folder to see the status and latest updates across your workflows, coaches, tasks, and conversations. Find what needs attention at a glance.
 
 ![Dashi dashboard](docs/demo.png)
 
