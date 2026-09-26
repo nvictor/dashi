@@ -35,7 +35,9 @@ struct ContentView: View {
                 Label("Overview", systemImage: "square.grid.2x2").tag("all")
                 Section("Types") {
                     ForEach(PackageKind.allCases, id: \.self) { kind in
-                        Label(kind.pluralName, systemImage: kind.symbol).tag(kind.rawValue)
+                        Label(kind.pluralName, systemImage: kind.symbol)
+                            .badge(store.items.filter { $0.kind == kind }.count)
+                            .tag(kind.rawValue)
                     }
                 }
                 Section("Sources") {
@@ -61,8 +63,6 @@ struct ContentView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 24) {
                             HStack(alignment: .firstTextBaseline) {
-                                Text("\(visible.count) items")
-                                    .foregroundStyle(.secondary)
                                 Spacer()
                                 Picker("Sort", selection: $ordering) {
                                     ForEach(CardOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
