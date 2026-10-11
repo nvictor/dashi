@@ -89,6 +89,12 @@ final class PackageReaderTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: symlink.appendingPathComponent("linked.md"), withDestinationURL: outside)
         XCTAssertTrue(try XCTUnwrap(PackageReader.read(symlink)).attention)
     }
+    func testDiscoverySkipsArchiveFolders() throws {
+        let archive = root.appendingPathComponent("archive")
+        try package("old-chat", kind: .conversation, state: "## Current question\nx", parent: archive)
+        try package("live-chat", kind: .conversation, state: "## Current question\nx")
+        XCTAssertEqual(Discovery.scan([root]).map(\.packageID), ["live-chat"])
+    }
     func testNestedDiscoveryOverlapAndDuplicateIDs() throws {
         let first = try package(parent: root.appendingPathComponent("one"))
         let second = try package(parent: root.appendingPathComponent("two"))

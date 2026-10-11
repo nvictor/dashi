@@ -164,7 +164,7 @@ struct Discovery {
                 if children.contains(where: { $0.lastPathComponent == "manifest.json" }), let item = PackageReader.read(root) { items[item.id] = item }
                 for child in children {
                     let values = try child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isPackageKey])
-                    if values.isDirectory == true && values.isSymbolicLink != true && values.isPackage != true && !["node_modules", "build", "DerivedData"].contains(child.lastPathComponent) { visit(child) }
+                    if values.isDirectory == true && values.isSymbolicLink != true && values.isPackage != true && !["node_modules", "build", "DerivedData", "archive", "archives"].contains(child.lastPathComponent) { visit(child) }
                 }
             } catch {
                 var issue = DashboardItem(folder: root, packageID: root.lastPathComponent, name: root.lastPathComponent)
