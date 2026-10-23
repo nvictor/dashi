@@ -78,6 +78,17 @@ struct DashboardItem: Identifiable, Sendable {
         case nil: return nil
         }
     }
+    /// Read-only: reports status without running a session, step, or exchange, and without writing any file.
+    var statusPrompt: String? {
+        let path = "\"\(folder.path)\""
+        let readOnly = "This is read-only: do not run or resume anything and do not modify any file."
+        switch kind {
+        case .workflow: return "Perform workflow-status on the portable workflow package at \(path). Read and follow runner.md. Treat state.md and memory.md as canonical cross-agent continuity. \(readOnly)"
+        case .conversation: return "Report the status of the portable conversation package at \(path). Read runner.md, state.md and memory.md. \(readOnly)"
+        case .coach, .task: return "Report the status of the portable \(kind!.rawValue.lowercased()) package at \(path). Read runner.md and state.md. \(readOnly)"
+        case nil: return nil
+        }
+    }
     /// Sort order for the "Status" card ordering: most urgent first, terminal and unknown last.
     var statusRank: Int {
         if !diagnostics.isEmpty { return 0 }

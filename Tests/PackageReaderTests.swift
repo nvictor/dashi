@@ -87,6 +87,9 @@ final class PackageReaderTests: XCTestCase {
             XCTAssertEqual(item.runPromptTitle, title)
             let prompt = try XCTUnwrap(item.runPrompt)
             XCTAssertTrue(prompt.contains("\"\(item.folder.path)\"")); XCTAssertTrue(prompt.contains("runner.md")); XCTAssertTrue(prompt.localizedCaseInsensitiveContains(kind.rawValue))
+            let status = try XCTUnwrap(item.statusPrompt)
+            XCTAssertTrue(status.contains("\"\(item.folder.path)\"")); XCTAssertTrue(status.contains("read-only")); XCTAssertTrue(status.localizedCaseInsensitiveContains("status"))
+            XCTAssertNotEqual(status, prompt)
         }
     }
     func testStatusRankOrder() throws {
