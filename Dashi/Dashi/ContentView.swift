@@ -76,7 +76,7 @@ struct ContentView: View {
                                 Spacer()
                                 Picker("Sort", selection: $ordering) {
                                     ForEach(CardOrder.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                                }.fixedSize().labelsHidden().accessibilityLabel("Sort cards")
+                                }.pickerStyle(.segmented).fixedSize().labelsHidden().accessibilityLabel("Sort cards")
                             }
                             if visible.isEmpty {
                                 ContentUnavailableView("No items found", systemImage: "doc.text.magnifyingglass", description: Text("Try another folder or change your filters."))
