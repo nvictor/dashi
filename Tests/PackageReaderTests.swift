@@ -30,10 +30,10 @@ final class PackageReaderTests: XCTestCase {
         let item = try XCTUnwrap(PackageReader.read(folder))
         XCTAssertEqual(item.status, "active"); XCTAssertEqual(item.summary, "Practice again"); XCTAssertNotNil(item.lastEvent); XCTAssertFalse(item.attention)
     }
-    func testTaskSeparatesLifecycleAndOutcome() throws {
-        let folder = try package(kind: .task, state: "## Last attempted run\n- 2026-09-01T10:00:00-04:00 — partial.\n## Current checkpoint\nTwo remaining\n## Known failures\n- None.")
+    func testTaskShowsLifecycleWithoutOutcome() throws {
+        let folder = try package(kind: .task, state: "## Last attempted run\n- 2026-09-01T10:00:00-04:00 — partial.\n## Current checkpoint\nTwo remaining\n## Known failures\n- Flaky step")
         let item = try XCTUnwrap(PackageReader.read(folder))
-        XCTAssertEqual(item.status, "active"); XCTAssertEqual(item.outcome, "partial"); XCTAssertTrue(item.attention)
+        XCTAssertEqual(item.status, "active"); XCTAssertNotNil(item.lastEvent); XCTAssertEqual(item.summary, "Two remaining"); XCTAssertFalse(item.attention)
     }
     func testConversationHasNoLifecycle() throws {
         let folder = try package(kind: .conversation, state: "# Conversation state\n\n## Current question\nWhat makes a chorus land?\n\n## Unresolved threads\nNone recorded yet.\n\n## Pending exchange\nNo exchange has occurred in this package.\n\n## Resume point\nStart from the current question.")
@@ -41,15 +41,53 @@ final class PackageReaderTests: XCTestCase {
         XCTAssertEqual(item.status, "ongoing"); XCTAssertEqual(item.summary, "What makes a chorus land?")
         XCTAssertFalse(item.attention); XCTAssertNil(item.lastEvent); XCTAssertTrue(item.diagnostics.isEmpty)
     }
-    func testAttentionReasonAndTerminalSuppression() throws {
+    func testAttentionIsOnlyBlockedOrUnreadable() throws {
         let blocked = try XCTUnwrap(PackageReader.read(try package("blocked", state: "Status: blocked\n## Current step\nx")))
         XCTAssertEqual(blocked.attentionReason, "Blocked"); XCTAssertEqual(blocked.attentionDetail, "Blocked")
         let open = try XCTUnwrap(PackageReader.read(try package("open", state: "Status: in_progress\n## Current step\nx\n## Pending decisions\n- Pick a database")))
-        XCTAssertEqual(open.attentionReason, "Unresolved pending decisions")
+        XCTAssertNil(open.attentionReason); XCTAssertFalse(open.attention)
         let done = try XCTUnwrap(PackageReader.read(try package("done", state: "Status: completed\n## Current step\nx\n## Blockers\n- Waiting on review")))
         XCTAssertEqual(done.status, "completed"); XCTAssertNil(done.attentionReason); XCTAssertFalse(done.attention)
-        let archived = try XCTUnwrap(PackageReader.read(try package("archived", kind: .task, state: "## Last attempted run\n- 2026-09-01T10:00:00Z — failed.\n## Current checkpoint\nx", changes: ["status": "archived"])))
-        XCTAssertEqual(archived.outcome, "failed"); XCTAssertFalse(archived.attention)
+    }
+    func testCadenceDays() {
+        XCTAssertNil(DueState.cadenceDays(["frequency": "manual", "interval": 1]))
+        XCTAssertEqual(DueState.cadenceDays(["frequency": "daily"]), 1)
+        XCTAssertEqual(DueState.cadenceDays(["frequency": "weekly", "interval": 1]), 7)
+        XCTAssertEqual(DueState.cadenceDays(["frequency": "weekly", "interval": 2]), 14)
+        XCTAssertEqual(DueState.cadenceDays(["frequency": "monthly", "interval": 1]), 30)
+        XCTAssertNil(DueState.cadenceDays(["frequency": "weekly", "interval": 0]))
+    }
+    func testDueStateBoundaries() {
+        XCTAssertEqual(DueState.classify(elapsedRatio: 0.74), .onTrack)
+        XCTAssertEqual(DueState.classify(elapsedRatio: 0.75), .dueSoon)
+        XCTAssertEqual(DueState.classify(elapsedRatio: 1.0), .dueSoon)
+        XCTAssertEqual(DueState.classify(elapsedRatio: 1.01), .overdue)
+        XCTAssertEqual(DueState.classify(elapsedRatio: .infinity), .overdue)
+    }
+    func testCoachDueStateFromManifestAndState() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-10-23T12:00:00Z")!
+        let schedule: [String: Any] = ["frequency": "weekly", "interval": 1]
+        let recent = try XCTUnwrap(PackageReader.read(try package("recent", kind: .coach, state: "## Last completed session\n- 2026-10-21T12:00:00Z: Done.", changes: ["schedule": schedule])))
+        XCTAssertEqual(recent.dueState(now: now), .onTrack)
+        let late = try XCTUnwrap(PackageReader.read(try package("late", kind: .coach, state: "## Last completed session\n- 2026-10-01T12:00:00Z: Done.", changes: ["schedule": schedule])))
+        XCTAssertEqual(late.dueState(now: now), .overdue)
+        let never = try XCTUnwrap(PackageReader.read(try package("never", kind: .coach, state: "## Last completed session\n- None recorded.", changes: ["schedule": schedule])))
+        XCTAssertEqual(never.dueState(now: now), .overdue)
+        let manual = try XCTUnwrap(PackageReader.read(try package("manual", kind: .coach, state: "## Last completed session\n- 2026-10-01T12:00:00Z: Done.", changes: ["schedule": ["frequency": "manual", "interval": 1]])))
+        XCTAssertNil(manual.dueState(now: now))
+        let paused = try XCTUnwrap(PackageReader.read(try package("paused", kind: .coach, state: "## Last completed session\n- 2026-10-01T12:00:00Z: Done.", changes: ["schedule": schedule, "status": "paused"])))
+        XCTAssertNil(paused.dueState(now: now))
+        let task = try XCTUnwrap(PackageReader.read(try package("task", kind: .task, state: "## Last attempted run\n- 2026-10-01T12:00:00Z: Done.", changes: ["schedule": schedule])))
+        XCTAssertNil(task.dueState(now: now))
+    }
+    func testRunPromptPerKind() throws {
+        let titles: [PackageKind: String] = [.coach: "Run Coach", .task: "Run Task", .workflow: "Resume Workflow", .conversation: "Resume Conversation"]
+        for (kind, title) in titles {
+            let item = try XCTUnwrap(PackageReader.read(try package("p-\(kind.rawValue.lowercased())", kind: kind, state: kind == .workflow ? "Status: draft\n## Current step\nx" : "## Current question\nx")))
+            XCTAssertEqual(item.runPromptTitle, title)
+            let prompt = try XCTUnwrap(item.runPrompt)
+            XCTAssertTrue(prompt.contains("\"\(item.folder.path)\"")); XCTAssertTrue(prompt.contains("runner.md")); XCTAssertTrue(prompt.localizedCaseInsensitiveContains(kind.rawValue))
+        }
     }
     func testStatusRankOrder() throws {
         let ranks = try ["Status: blocked", "Status: in_progress", "Status: paused", "Status: draft", "Status: completed", "Status: abandoned"].enumerated().map {

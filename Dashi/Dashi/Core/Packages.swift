@@ -5,6 +5,27 @@ enum PackageKind: String, CaseIterable, Codable, Sendable {
     var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file"; case .conversation: "conversation_file" } }
     var pluralName: String { switch self { case .coach: "Coaches"; default: rawValue + "s" } }
 }
+/// How a coach's last run compares with its target cadence.
+enum DueState: Int, Sendable {
+    case overdue, dueSoon, onTrack
+    var label: String { switch self { case .overdue: "Overdue"; case .dueSoon: "Due soon"; case .onTrack: "On track" } }
+    /// Share of the cadence period that must pass before a coach counts as due soon.
+    static let dueSoonThreshold = 0.75
+    static func classify(elapsedRatio: Double) -> DueState {
+        elapsedRatio > 1 ? .overdue : elapsedRatio >= dueSoonThreshold ? .dueSoon : .onTrack
+    }
+    /// Length in days of one cadence period from a manifest `schedule`; nil for manual or invalid schedules.
+    static func cadenceDays(_ schedule: [String: Any]) -> Int? {
+        let interval = schedule["interval"] as? Int ?? 1
+        guard interval >= 1 else { return nil }
+        switch schedule["frequency"] as? String {
+        case "daily": return interval
+        case "weekly": return 7 * interval
+        case "monthly": return 30 * interval
+        default: return nil
+        }
+    }
+}
 struct StateSection: Identifiable, Sendable {
     var id: Int
     var title: String
@@ -24,14 +45,39 @@ struct DashboardItem: Identifiable, Sendable {
     var modified: Date?
     var stateURL: URL?
     var definitionURL: URL?
-    var schedule: String?
+    var cadenceDays: Int?
     var lastEvent: Date?
-    var outcome: String?
     var stale = false
     var typeName: String { kind?.rawValue ?? "Issue" }
     var modifiedSort: Date { modified ?? .distantPast }
     var attention: Bool { attentionReason != nil || !diagnostics.isEmpty }
     var attentionDetail: String? { attentionReason ?? diagnostics.first }
+    /// Time since the last run as a share of the cadence period. Infinite when a cadence exists but there has been no run.
+    func elapsedRatio(now: Date = .now) -> Double? {
+        guard kind == .coach, status == "active", let days = cadenceDays else { return nil }
+        guard let last = lastEvent else { return .infinity }
+        return max(0, now.timeIntervalSince(last)) / (Double(days) * 86400)
+    }
+    func dueState(now: Date = .now) -> DueState? { elapsedRatio(now: now).map(DueState.classify) }
+    var runPromptTitle: String? {
+        switch kind {
+        case .coach: "Run Coach"
+        case .task: "Run Task"
+        case .workflow: "Resume Workflow"
+        case .conversation: "Resume Conversation"
+        case nil: nil
+        }
+    }
+    var runPrompt: String? {
+        let path = "\"\(folder.path)\""
+        switch kind {
+        case .coach: return "Run the portable coach package at \(path). Read and follow runner.md. Treat state.md as the canonical cross-agent state."
+        case .task: return "Run the portable task package at \(path). Read and follow runner.md. Treat state.md as the canonical cross-agent state."
+        case .workflow: return "Perform workflow-run on the portable workflow package at \(path). Read and follow runner.md. Treat state.md and memory.md as canonical cross-agent continuity."
+        case .conversation: return "Resume the portable conversation package at \(path). Read and follow runner.md. Treat state.md and memory.md as canonical cross-agent continuity."
+        case nil: return nil
+        }
+    }
     /// Sort order for the "Status" card ordering: most urgent first, terminal and unknown last.
     var statusRank: Int {
         if !diagnostics.isEmpty { return 0 }
@@ -134,18 +180,9 @@ struct PackageReader {
                 else { item.diagnostics.append("Missing or invalid package lifecycle.") }
                 item.summary = doc.section(kind == .coach ? "Next useful target" : "Current checkpoint") ?? "Unavailable"
                 item.lastEvent = StateDocument.explicitDate(doc.section(kind == .coach ? "Last completed session" : "Last attempted run"))
-                if kind == .task, let run = doc.section("Last attempted run") {
-                    let words = run.lowercased().components(separatedBy: CharacterSet.letters.inverted)
-                    let outcomes = ["success", "failed", "blocked", "partial", "no-op"].filter { $0 == "no-op" ? run.lowercased().contains("no-op") : words.contains($0) }
-                    if outcomes.count == 1 { item.outcome = outcomes[0] }
-                }
-                if let schedule = manifest["schedule"] as? [String: Any], let data = try? JSONSerialization.data(withJSONObject: schedule, options: [.prettyPrinted, .sortedKeys]) { item.schedule = String(data: data, encoding: .utf8) }
+                if kind == .coach, let schedule = manifest["schedule"] as? [String: Any] { item.cadenceDays = DueState.cadenceDays(schedule) }
             }
-            let terminal = ["completed", "abandoned", "archived"].contains(item.status)
-            let openSections = terminal ? [] : ["Blockers", "Pending decisions", "Known failures", "Open interaction", "Open operation"].filter { StateDocument.meaningful(doc.section($0)) }
             if item.status == "blocked" { item.attentionReason = "Blocked" }
-            else if !terminal, let outcome = item.outcome, ["failed", "blocked", "partial"].contains(outcome) { item.attentionReason = "Last run \(outcome)" }
-            else if let section = openSections.first { item.attentionReason = "Unresolved \(section.lowercased())" }
         } catch { item.diagnostics.append(error.localizedDescription) }
         return item
     }

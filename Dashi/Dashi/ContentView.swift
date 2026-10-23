@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var ordering = CardOrder.recent
 
     private enum CardOrder: String, CaseIterable {
-        case recent = "Most recent", status = "Status"
+        case recent = "Most recent", status = "Status", due = "Due"
     }
     private var visible: [DashboardItem] {
         store.items.filter { item in
@@ -18,6 +18,10 @@ struct ContentView: View {
             else { matches = true }
             return matches && (search.isEmpty || "\(item.name) \(item.packageID)".localizedCaseInsensitiveContains(search))
         }.sorted { lhs, rhs in
+            if ordering == .due {
+                let left = lhs.elapsedRatio() ?? -1, right = rhs.elapsedRatio() ?? -1
+                if left != right { return left > right }
+            }
             if ordering == .status {
                 if lhs.statusRank != rhs.statusRank { return lhs.statusRank < rhs.statusRank }
                 if lhs.attention != rhs.attention { return lhs.attention }
@@ -29,6 +33,12 @@ struct ContentView: View {
             return comparison == .orderedSame ? lhs.id < rhs.id : comparison == .orderedAscending
         }
     }
+    private func badgeCount(for kind: PackageKind) -> Int {
+        let items = store.items.filter { $0.kind == kind }
+        guard kind == .coach else { return items.count }
+        let overdue = items.filter { $0.dueState() == .overdue }.count
+        return overdue > 0 ? overdue : items.count
+    }
     var body: some View {
         NavigationSplitView {
             List(selection: $filter) {
@@ -36,7 +46,7 @@ struct ContentView: View {
                 Section("Types") {
                     ForEach(PackageKind.allCases, id: \.self) { kind in
                         Label(kind.pluralName, systemImage: kind.symbol)
-                            .badge(store.items.filter { $0.kind == kind }.count)
+                            .badge(badgeCount(for: kind))
                             .tag(kind.rawValue)
                     }
                 }
@@ -90,6 +100,7 @@ struct ContentView: View {
             }
         }
         .dropDestination(for: URL.self) { urls, _ in store.add(urls); return !urls.isEmpty }
+        .onChange(of: filter) { _, new in if new == PackageKind.coach.rawValue { ordering = .due } }
         .frame(minWidth: 780, minHeight: 520)
         .alert("Dashi", isPresented: Binding(get: { store.error != nil }, set: { if !$0 { store.error = nil } })) { Button("OK") { store.error = nil } } message: { Text(store.error ?? "") }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in store.refresh() }
@@ -120,8 +131,22 @@ struct StatusCard: View {
         return item.status.replacingOccurrences(of: "_", with: " ").capitalized
     }
     private var dateLabel: String {
-        guard item.lastEvent != nil else { return "State updated" }
+        guard item.lastEvent != nil else { return item.kind == .coach ? "Last session" : "State updated" }
         return item.kind == .coach ? "Last session" : "Last run"
+    }
+    private func dueChip(_ due: DueState, ratio: Double) -> some View {
+        let color: Color = due == .overdue ? .orange : due == .dueSoon ? .yellow : .green
+        let detail = due == .overdue && ratio.isFinite ? String(format: "%.1f× cadence", ratio) : nil
+        return Text([due.label, detail].compactMap { $0 }.joined(separator: " · "))
+            .font(.caption.weight(.semibold)).lineLimit(1)
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .foregroundStyle(color)
+            .background(color.opacity(0.12), in: Capsule())
+            .help(ratio.isFinite ? "\(Int(ratio * 100))% of the target cadence has passed since the last session." : "No session recorded yet.")
+    }
+    private var lastRunAge: String? {
+        guard item.kind == .coach, let date = item.lastEvent else { return nil }
+        return date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -130,15 +155,11 @@ struct StatusCard: View {
                     .font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Spacer()
                 Menu {
-                    Button("Resume Prompt") {
-                        let prompt = "Let's continue working on \(item.name) in \"\(item.folder.path)\"."
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(prompt, forType: .string)
-                    }
-                    Button("Status Prompt") {
-                        let prompt = "What's the status of \(item.name) in \"\(item.folder.path)\"?"
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(prompt, forType: .string)
+                    if let title = item.runPromptTitle, let prompt = item.runPrompt {
+                        Button(title) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(prompt, forType: .string)
+                        }
                     }
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
                     if !item.diagnostics.isEmpty { Button("Show Read Error…") { showIssue = true } }
@@ -158,17 +179,18 @@ struct StatusCard: View {
                     Label(detail, systemImage: "exclamationmark.circle.fill")
                         .font(.caption).foregroundStyle(.orange).lineLimit(1)
                         .accessibilityLabel("Needs attention: \(detail)").help(detail)
-                } else if item.kind == .task, let outcome = item.outcome {
-                    Text("Last run: \(outcome)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
+                if let due = item.dueState() { dueChip(due, ratio: item.elapsedRatio() ?? 0) }
             }
             Divider()
             HStack {
                 Text(dateLabel).foregroundStyle(.secondary)
                 Spacer()
-                if let date = item.lastEvent ?? item.modified {
-                    Text(date, format: .dateTime.month(.abbreviated).day().year())
-                        .help("\(dateLabel): \(date.formatted())")
+                if let date = item.kind == .coach ? item.lastEvent : (item.lastEvent ?? item.modified) {
+                    HStack(spacing: 6) {
+                        if let age = lastRunAge { Text(age).foregroundStyle(.secondary) }
+                        Text(date, format: .dateTime.month(.abbreviated).day().year())
+                    }.help("\(dateLabel): \(date.formatted())")
                 } else { Text("Not recorded").foregroundStyle(.secondary) }
             }.font(.caption)
         }
