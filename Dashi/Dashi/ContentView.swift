@@ -189,20 +189,6 @@ struct StatusCard: View {
                 }
                 if let due = item.dueState() { dueChip(due, ratio: item.elapsedRatio() ?? 0) }
             }
-            if item.kind == .opportunity {
-                Text(item.summary).font(.subheadline).lineLimit(3)
-                if let next = item.sections.first(where: { $0.title == "Next evaluation step" }) {
-                    Text(next.body).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }
-                DisclosureGroup("Assessment details") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(item.sections.filter { $0.title != "Current assessment" && $0.title != "Next evaluation step" }) { section in
-                            Text(section.title).font(.caption.weight(.semibold))
-                            Text(section.body).font(.caption).textSelection(.enabled)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
             Divider()
             HStack {
                 Text(dateLabel).foregroundStyle(.secondary)
