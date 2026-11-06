@@ -109,7 +109,7 @@ struct ContentView: View {
 
 private extension PackageKind {
     var symbol: String {
-        switch self { case .workflow: "point.3.connected.trianglepath.dotted"; case .coach: "figure.mind.and.body"; case .task: "checkmark.circle"; case .conversation: "bubble.left.and.bubble.right" }
+        switch self { case .workflow: "point.3.connected.trianglepath.dotted"; case .coach: "figure.mind.and.body"; case .task: "checkmark.circle"; case .conversation: "bubble.left.and.bubble.right"; case .opportunity: "lightbulb" }
     }
 }
 
@@ -120,8 +120,8 @@ struct StatusCard: View {
         if item.stale || !item.diagnostics.isEmpty { return .orange }
         switch item.status {
         case "blocked": return .orange
-        case "completed": return .green
-        case "active", "in_progress": return .teal
+        case "completed", "pursued": return .green
+        case "active", "in_progress", "evaluating": return .teal
         default: return .secondary
         }
     }
@@ -162,13 +162,14 @@ struct StatusCard: View {
                         }
                     }
                     if let prompt = item.statusPrompt {
-                        Button("Status") {
+                        Button("Copy Status Prompt") {
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(prompt, forType: .string)
                         }
                     }
+                    Divider()
                     Button("Reveal in Finder") { NSWorkspace.shared.activateFileViewerSelecting([item.folder]) }
-                    if !item.diagnostics.isEmpty { Button("Show Read Error…") { showIssue = true } }
+                    if !item.diagnostics.isEmpty { Button("Show Read Errors…") { showIssue = true } }
                 } label: { Image(systemName: "ellipsis") }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("Actions for \(item.name)")
@@ -187,6 +188,20 @@ struct StatusCard: View {
                         .accessibilityLabel("Needs attention: \(detail)").help(detail)
                 }
                 if let due = item.dueState() { dueChip(due, ratio: item.elapsedRatio() ?? 0) }
+            }
+            if item.kind == .opportunity {
+                Text(item.summary).font(.subheadline).lineLimit(3)
+                if let next = item.sections.first(where: { $0.title == "Next evaluation step" }) {
+                    Text(next.body).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
+                DisclosureGroup("Assessment details") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(item.sections.filter { $0.title != "Current assessment" && $0.title != "Next evaluation step" }) { section in
+                            Text(section.title).font(.caption.weight(.semibold))
+                            Text(section.body).font(.caption).textSelection(.enabled)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             Divider()
             HStack {

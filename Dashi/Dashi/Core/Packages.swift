@@ -1,9 +1,9 @@
 import Foundation
 
 enum PackageKind: String, CaseIterable, Codable, Sendable {
-    case workflow = "Workflow", coach = "Coach", task = "Task", conversation = "Conversation"
-    var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file"; case .conversation: "conversation_file" } }
-    var pluralName: String { switch self { case .coach: "Coaches"; default: rawValue + "s" } }
+    case workflow = "Workflow", coach = "Coach", task = "Task", conversation = "Conversation", opportunity = "Opportunity"
+    var field: String { switch self { case .workflow: "workflow_file"; case .coach: "prompt_file"; case .task: "task_file"; case .conversation: "conversation_file"; case .opportunity: "opportunity_file" } }
+    var pluralName: String { switch self { case .coach: "Coaches"; case .opportunity: "Opportunities"; default: rawValue + "s" } }
 }
 /// How a coach's last run compares with its target cadence.
 enum DueState: Int, Sendable {
@@ -61,16 +61,24 @@ struct DashboardItem: Identifiable, Sendable {
     func dueState(now: Date = .now) -> DueState? { elapsedRatio(now: now).map(DueState.classify) }
     var runPromptTitle: String? {
         switch kind {
-        case .coach: "Run Coach"
-        case .task: "Run Task"
-        case .workflow: "Resume Workflow"
-        case .conversation: "Resume Conversation"
+        case .coach: "Copy Coaching Prompt"
+        case .task: "Copy Run Prompt"
+        case .workflow:
+            switch status {
+            case "draft": "Copy Start Prompt"
+            case "in_progress", "paused", "blocked": "Copy Resume Prompt"
+            default: nil
+            }
+        case .conversation: "Copy Resume Prompt"
+        case .opportunity: "Copy Evaluation Prompt"
         case nil: nil
         }
     }
     var runPrompt: String? {
+        guard runPromptTitle != nil else { return nil }
         let path = "\"\(folder.path)\""
         switch kind {
+        case .opportunity: return "Evaluate the portable opportunity package at \(path). Read and follow runner.md. Treat state.md as canonical continuity. Assess value and uncertainty; do not begin delivery or change the decision without my instruction."
         case .coach: return "Run the portable coach package at \(path). Read and follow runner.md. Treat state.md as the canonical cross-agent state."
         case .task: return "Run the portable task package at \(path). Read and follow runner.md. Treat state.md as the canonical cross-agent state."
         case .workflow: return "Perform workflow-run on the portable workflow package at \(path). Read and follow runner.md. Treat state.md and memory.md as canonical cross-agent continuity."
@@ -85,6 +93,7 @@ struct DashboardItem: Identifiable, Sendable {
         switch kind {
         case .workflow: return "Perform workflow-status on the portable workflow package at \(path). Read and follow runner.md. Treat state.md and memory.md as canonical cross-agent continuity. \(readOnly)"
         case .conversation: return "Report the status of the portable conversation package at \(path). Read runner.md, state.md and memory.md. \(readOnly)"
+        case .opportunity: return "Report the status of the portable opportunity package at \(path). Read runner.md, the opportunity definition and state.md. \(readOnly)"
         case .coach, .task: return "Report the status of the portable \(kind!.rawValue.lowercased()) package at \(path). Read runner.md and state.md. \(readOnly)"
         case nil: return nil
         }
@@ -94,11 +103,11 @@ struct DashboardItem: Identifiable, Sendable {
         if !diagnostics.isEmpty { return 0 }
         switch status {
         case "blocked": return 1
-        case "in_progress", "active": return 2
-        case "paused": return 3
-        case "draft": return 4
-        case "completed": return 5
-        case "archived", "abandoned": return 6
+        case "in_progress", "active", "evaluating": return 2
+        case "paused", "deferred": return 3
+        case "draft", "captured": return 4
+        case "completed", "pursued": return 5
+        case "archived", "abandoned", "declined": return 6
         default: return 7
         }
     }
@@ -159,7 +168,7 @@ struct PackageReader {
             item.kind = kind
             item.packageID = manifest["id"] as? String ?? folder.lastPathComponent
             item.name = manifest["name"] as? String ?? item.packageID.replacingOccurrences(of: "-", with: " ").capitalized
-            guard let version = manifest["schema_version"] as? Int, version == (kind == .workflow || kind == .conversation ? 1 : 2) else { throw ReadError("Unsupported package schema version.") }
+            guard let version = manifest["schema_version"] as? Int, version == (kind == .workflow || kind == .conversation || kind == .opportunity ? 1 : 2) else { throw ReadError("Unsupported package schema version.") }
             guard let packageID = manifest["id"] as? String, packageID == folder.lastPathComponent,
                   packageID.range(of: "^[a-z0-9]+(?:-[a-z0-9]+)*$", options: .regularExpression) != nil else { throw ReadError("Package ID must match its folder and use lowercase hyphenated words.") }
             func file(_ key: String) throws -> URL {
@@ -183,6 +192,11 @@ struct PackageReader {
                 if statuses.count == 1, let status = statuses.first, ["draft", "in_progress", "paused", "blocked", "completed", "abandoned"].contains(status) { item.status = status }
                 else { item.diagnostics.append("Missing, ambiguous, or invalid workflow lifecycle.") }
                 item.summary = doc.section("Current step") ?? "Unavailable"
+            } else if kind == .opportunity {
+                let statuses = doc.preamble.components(separatedBy: .newlines).filter { $0.hasPrefix("Status:") }.map { $0.dropFirst(7).trimmingCharacters(in: .whitespaces) }
+                if statuses.count == 1, let status = statuses.first, ["captured", "evaluating", "deferred", "pursued", "declined"].contains(status) { item.status = status }
+                else { item.diagnostics.append("Missing, ambiguous, or invalid opportunity lifecycle.") }
+                item.summary = doc.section("Current assessment") ?? "Unavailable"
             } else if kind == .conversation {
                 item.status = "ongoing"
                 item.summary = doc.section("Current question") ?? "Unavailable"

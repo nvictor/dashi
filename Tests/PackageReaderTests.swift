@@ -12,7 +12,7 @@ final class PackageReaderTests: XCTestCase {
     func package(_ name: String = "sample", kind: PackageKind = .workflow, state: String = "Status: draft\n\n## Current step\nStep one", parent: URL? = nil, changes: [String: Any] = [:]) throws -> URL {
         let folder = (parent ?? root).appendingPathComponent(name)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        var manifest: [String: Any] = ["id": name, "schema_version": kind == .workflow || kind == .conversation ? 1 : 2, kind.field: "definition.md", "state_file": "state.md", "runner_file": "runner.md", "status": "active", "memory_file": "memory.md"]
+        var manifest: [String: Any] = ["id": name, "schema_version": kind == .workflow || kind == .conversation || kind == .opportunity ? 1 : 2, kind.field: "definition.md", "state_file": "state.md", "runner_file": "runner.md", "status": "active", "memory_file": "memory.md"]
         manifest.merge(changes) { _, new in new }
         try JSONSerialization.data(withJSONObject: manifest).write(to: folder.appendingPathComponent("manifest.json"))
         for file in ["definition.md", "runner.md", "memory.md"] { try "# Synthetic fixture".write(to: folder.appendingPathComponent(file), atomically: true, encoding: .utf8) }
@@ -81,7 +81,7 @@ final class PackageReaderTests: XCTestCase {
         XCTAssertNil(task.dueState(now: now))
     }
     func testRunPromptPerKind() throws {
-        let titles: [PackageKind: String] = [.coach: "Run Coach", .task: "Run Task", .workflow: "Resume Workflow", .conversation: "Resume Conversation"]
+        let titles: [PackageKind: String] = [.coach: "Copy Coaching Prompt", .task: "Copy Run Prompt", .workflow: "Copy Start Prompt", .conversation: "Copy Resume Prompt", .opportunity: "Copy Evaluation Prompt"]
         for (kind, title) in titles {
             let item = try XCTUnwrap(PackageReader.read(try package("p-\(kind.rawValue.lowercased())", kind: kind, state: kind == .workflow ? "Status: draft\n## Current step\nx" : "## Current question\nx")))
             XCTAssertEqual(item.runPromptTitle, title)
@@ -209,5 +209,54 @@ extension PackageReaderTests {
         XCTAssertEqual(StateDocument.explicitDate("2026-09-01T10:00:00-04:00"), StateDocument.explicitDate("2026-09-01T14:00:00Z"))
         XCTAssertNotNil(StateDocument.explicitDate("2026-09-01T10:00:00.123Z"))
         XCTAssertNil(StateDocument.explicitDate("September 1, 2026"))
+    }
+}
+
+
+extension PackageReaderTests {
+    func testOpportunityLifecycleAndDiscovery() throws {
+        for status in ["captured", "evaluating", "deferred", "pursued", "declined"] {
+            let folder = try package(status, kind: .opportunity, state: "Status: \(status)\n## Current assessment\nCould reduce repeated work\n## Next evaluation step\nMeasure one example\n## Revisit trigger\nTeam grows", changes: ["schedule": ["frequency": "daily"]])
+            try FileManager.default.removeItem(at: folder.appendingPathComponent("memory.md"))
+            let item = try XCTUnwrap(PackageReader.read(folder))
+            XCTAssertEqual(item.kind, .opportunity)
+            XCTAssertEqual(item.status, status)
+            XCTAssertEqual(item.summary, "Could reduce repeated work")
+            XCTAssertTrue(item.diagnostics.isEmpty)
+            XCTAssertFalse(item.attention)
+            XCTAssertNil(item.dueState())
+            XCTAssertEqual(item.sections.last?.body, "Team grows")
+        }
+        XCTAssertEqual(Discovery.scan([root]).count, 5)
+        XCTAssertEqual(PackageKind.opportunity.pluralName, "Opportunities")
+    }
+    func testOpportunityRejectsInvalidLifecycleAndConflictingType() throws {
+        for (index, state) in ["Status: active", "Status: captured\nStatus: declined", "## Current assessment\nStatus: captured"].enumerated() {
+            let item = try XCTUnwrap(PackageReader.read(try package("bad-\(index)", kind: .opportunity, state: state)))
+            XCTAssertEqual(item.status, "Unavailable")
+            XCTAssertTrue(item.attention)
+        }
+        let conflict = try package("conflict", kind: .opportunity, changes: ["workflow_file": "definition.md"])
+        XCTAssertTrue(try XCTUnwrap(PackageReader.read(conflict)).attention)
+    }
+}
+
+
+extension PackageReaderTests {
+    func testWorkflowPromptAvailabilityFollowsLifecycle() throws {
+        for status in ["draft", "in_progress", "paused", "blocked", "completed", "abandoned", "invalid"] {
+            let item = try XCTUnwrap(PackageReader.read(try package(status.replacingOccurrences(of: "_", with: "-"), state: "Status: \(status)\n## Current step\nExample")))
+            if status == "draft" {
+                XCTAssertEqual(item.runPromptTitle, "Copy Start Prompt")
+                XCTAssertNotNil(item.runPrompt)
+            } else if ["in_progress", "paused", "blocked"].contains(status) {
+                XCTAssertEqual(item.runPromptTitle, "Copy Resume Prompt")
+                XCTAssertNotNil(item.runPrompt)
+            } else {
+                XCTAssertNil(item.runPromptTitle)
+                XCTAssertNil(item.runPrompt)
+            }
+            XCTAssertNotNil(item.statusPrompt)
+        }
     }
 }
